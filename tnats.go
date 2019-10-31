@@ -8,7 +8,7 @@ import (
 
 	"github.com/nats-io/go-nats"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 )
 
 /*----------------------------------------------------------------------------*\
@@ -40,14 +40,14 @@ func (tn *Transporter) Listen() error {
 
 	if tn.isClosed {
 		errMsg := "The nats connection has been closed and can not be open again"
-		log.Errorln(errMsg)
+		log.Error().Msg(errMsg)
 
 		return errors.New(errMsg)
 	}
 
 	if tn.conn == nil || tn.conn.Status() != nats.CONNECTED {
 		errMsg := "The nats connection is either nil or do not have status connected"
-		log.Errorln(errMsg)
+		log.Error().Msg(errMsg)
 
 		return errors.New(errMsg)
 	}
@@ -60,10 +60,10 @@ func (tn *Transporter) Listen() error {
 	tn.conn.Flush()
 
 	if err := tn.conn.LastError(); err != nil {
-		log.Fatal(err)
+		log.Fatal().Msg(err.Error())
 	}
 
-	log.Infoln("Service listening with nats")
+	log.Info().Msg("Service listening with nats")
 
 	// Wait to receive data from the close channel to close the connection
 	<-tn.closeChan
@@ -114,7 +114,7 @@ func (tn *Transporter) subscribe(subject string, a handler.ListenerAction) error
 		req := handler.Request{Data: msg.Data}
 		resp, err := a.Fn(req)
 		if err != nil {
-			log.Errorf("Handling subject %s - %s", subject, err)
+			log.Error().Msgf("Handling subject %s - %s", subject, err)
 
 			if tn.errorHandler != nil {
 				tn.conn.Publish(msg.Reply, tn.errorHandler(err))
@@ -146,7 +146,7 @@ func (tn *Transporter) subscribe(subject string, a handler.ListenerAction) error
 	}
 
 	if err != nil {
-		log.Errorf("Error when adding subscription to nats - %s \n", err)
+		log.Error().Msgf("Error when adding subscription to nats - %s \n", err)
 		return err
 	}
 
@@ -191,7 +191,7 @@ func CreateConn(natsURLS string, opts []nats.Option) (*nats.Conn, error) {
 	conn, err := nats.Connect(natsURLS, opts...)
 
 	if err != nil {
-		log.Error(err)
+		log.Error().Msg(err.Error())
 
 		return nil, err
 	}
