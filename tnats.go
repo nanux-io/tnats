@@ -28,8 +28,8 @@ const NatsOptIsQueued handler.OptName = "NATS_IS_QUEUED"
 type Transporter struct {
 	conn *nats.Conn
 	// The key corresponds to the subject associate to the action
-	actions      map[string]handler.ListenerAction
-	errorHandler handler.ManageError
+	actions      map[string]handler.ActionListener
+	errorHandler handler.ErrorHandler
 	closeChan    chan bool
 	isClosed     bool
 }
@@ -73,7 +73,7 @@ func (tn *Transporter) Listen() error {
 
 // HandleAction add the action and associate it to the subject. This action will be
 // used when listen is called.
-func (tn *Transporter) HandleAction(subject string, action handler.ListenerAction) error {
+func (tn *Transporter) HandleAction(subject string, action handler.ActionListener) error {
 	// Check if an action is already associated to the subject
 	if _, ok := tn.actions[subject]; ok == true {
 		return errors.New("There is already an action associated to the subject " + subject)
@@ -90,7 +90,7 @@ func (tn *Transporter) HandleAction(subject string, action handler.ListenerActio
 }
 
 // HandleError specify the function to use for handling error returns by action
-func (tn *Transporter) HandleError(errHandler handler.ManageError) error {
+func (tn *Transporter) HandleError(errHandler handler.ErrorHandler) error {
 	tn.errorHandler = errHandler
 	return nil
 }
@@ -108,7 +108,7 @@ func (tn *Transporter) subscribeAll() error {
 	return nil
 }
 
-func (tn *Transporter) subscribe(subject string, a handler.ListenerAction) error {
+func (tn *Transporter) subscribe(subject string, a handler.ActionListener) error {
 	subscribeType := "normal"
 	subscribeHandler := func(msg *nats.Msg) {
 		req := handler.Request{Data: msg.Data}
@@ -180,7 +180,7 @@ func (tn *Transporter) Close() error {
 func New(nc *nats.Conn) Transporter {
 	return Transporter{
 		conn:      nc,
-		actions:   make(map[string]handler.ListenerAction),
+		actions:   make(map[string]handler.ActionListener),
 		closeChan: make(chan bool),
 	}
 }

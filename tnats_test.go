@@ -40,7 +40,7 @@ var _ = Describe("Nats transporter", func() {
 			return res, nil
 		}
 
-		action := handler.ListenerAction{Fn: fn1}
+		action := handler.ActionListener{Fn: fn1}
 
 		err := nt.HandleAction(sub, action)
 		Expect(err).ShouldNot(HaveOccurred())
@@ -50,7 +50,7 @@ var _ = Describe("Nats transporter", func() {
 			return nil, errors.New("Error in action")
 		}
 
-		err = nt.HandleAction(subErr, handler.ListenerAction{Fn: fn2})
+		err = nt.HandleAction(subErr, handler.ActionListener{Fn: fn2})
 		Expect(err).ShouldNot(HaveOccurred())
 
 	})
@@ -60,7 +60,7 @@ var _ = Describe("Nats transporter", func() {
 			return res, nil
 		}
 
-		action := handler.ListenerAction{
+		action := handler.ActionListener{
 			Fn:   fn,
 			Opts: []handler.Opt{{Name: NatsOptIsQueued, Value: true}},
 		}
@@ -72,7 +72,7 @@ var _ = Describe("Nats transporter", func() {
 	It("should throw error if adding several actions for same subject", func() {
 		fn := func(req handler.Request) ([]byte, error) { return nil, nil }
 
-		action := handler.ListenerAction{Fn: fn}
+		action := handler.ActionListener{Fn: fn}
 
 		nt.HandleAction("sameSub", action)
 		err := nt.HandleAction("sameSub", action)
