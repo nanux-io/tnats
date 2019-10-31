@@ -11,8 +11,21 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// Nats define a nats instance
-type Nats struct {
+/*----------------------------------------------------------------------------*\
+  Options for actions handled by nats
+\*----------------------------------------------------------------------------*/
+
+// NatsOptIsQueued is the name for the option telling to nat that the action must be queued.
+// It means that only one subscriber will respond to the request
+const NatsOptIsQueued handler.OptName = "NATS_IS_QUEUED"
+
+/*----------------------------------------------------------------------------*\
+  tNats transporter
+\*----------------------------------------------------------------------------*/
+
+// Transporter define a tnats instance of transporter which resolve the `Listener`
+// interface from nanux transporter package
+type Transporter struct {
 	conn *nats.Conn
 	// The key corresponds to the subject associate to the action
 	actions      map[string]handler.ListenerAction
@@ -21,63 +34,55 @@ type Nats struct {
 	isClosed     bool
 }
 
-/*----------------------------------------------------------------------------------*\
-// Options for actions handled by nats
-\*----------------------------------------------------------------------------------*/
-
-// NatsOptIsQueued is the name for the option telling to nat that the action must be queued.
-// It means that only one subscriber will respond to the request
-const NatsOptIsQueued handler.OptName = "NATS_IS_QUEUED"
-
 // Listen initialize the connection to nats server and subscribe to
 // the actions specified using Addhandler.
-func (nt *Nats) Listen() error {
+func (tn *Transporter) Listen() error {
 
-	if nt.isClosed {
+	if tn.isClosed {
 		errMsg := "The nats connection has been closed and can not be open again"
 		log.Errorln(errMsg)
 
 		return errors.New(errMsg)
 	}
 
-	if nt.conn == nil || nt.conn.Status() != nats.CONNECTED {
+	if tn.conn == nil || tn.conn.Status() != nats.CONNECTED {
 		errMsg := "The nats connection is either nil or do not have status connected"
 		log.Errorln(errMsg)
 
 		return errors.New(errMsg)
 	}
 
-	if err := nt.subscribeAll(); err != nil {
-		nt.conn.Close()
+	if err := tn.subscribeAll(); err != nil {
+		tn.conn.Close()
 		return err
 	}
 
-	nt.conn.Flush()
+	tn.conn.Flush()
 
-	if err := nt.conn.LastError(); err != nil {
+	if err := tn.conn.LastError(); err != nil {
 		log.Fatal(err)
 	}
 
 	log.Infoln("Service listening with nats")
 
 	// Wait to receive data from the close channel to close the connection
-	<-nt.closeChan
+	<-tn.closeChan
 
 	return nil
 }
 
 // HandleAction add the action and associate it to the subject. This action will be
 // used when listen is called.
-func (nt *Nats) HandleAction(subject string, action handler.ListenerAction) error {
+func (tn *Transporter) HandleAction(subject string, action handler.ListenerAction) error {
 	// Check if an action is already associated to the subject
-	if _, ok := nt.actions[subject]; ok == true {
+	if _, ok := tn.actions[subject]; ok == true {
 		return errors.New("There is already an action associated to the subject " + subject)
 	}
 
-	nt.actions[subject] = action
+	tn.actions[subject] = action
 
-	if nt.conn != nil && nt.conn.Status() == nats.CONNECTED {
-		if err := nt.subscribe(subject, action); err != nil {
+	if tn.conn != nil && tn.conn.Status() == nats.CONNECTED {
+		if err := tn.subscribe(subject, action); err != nil {
 			return err
 		}
 	}
@@ -85,17 +90,17 @@ func (nt *Nats) HandleAction(subject string, action handler.ListenerAction) erro
 }
 
 // HandleError specify the function to use for handling error returns by action
-func (nt *Nats) HandleError(errHandler handler.ManageError) error {
-	nt.errorHandler = errHandler
+func (tn *Transporter) HandleError(errHandler handler.ManageError) error {
+	tn.errorHandler = errHandler
 	return nil
 }
 
 // subscribeAll in nats for each actions associate to it.
-func (nt *Nats) subscribeAll() error {
+func (tn *Transporter) subscribeAll() error {
 	// For each action stored in the Nats instance, subscribe to it
 	// with the map key as subject.
-	for subject, action := range nt.actions {
-		if err := nt.subscribe(subject, action); err != nil {
+	for subject, action := range tn.actions {
+		if err := tn.subscribe(subject, action); err != nil {
 			return err
 		}
 	}
@@ -103,7 +108,7 @@ func (nt *Nats) subscribeAll() error {
 	return nil
 }
 
-func (nt *Nats) subscribe(subject string, a handler.ListenerAction) error {
+func (tn *Transporter) subscribe(subject string, a handler.ListenerAction) error {
 	subscribeType := "normal"
 	subscribeHandler := func(msg *nats.Msg) {
 		req := handler.Request{Data: msg.Data}
@@ -111,16 +116,16 @@ func (nt *Nats) subscribe(subject string, a handler.ListenerAction) error {
 		if err != nil {
 			log.Errorf("Handling subject %s - %s", subject, err)
 
-			if nt.errorHandler != nil {
-				nt.conn.Publish(msg.Reply, nt.errorHandler(err))
+			if tn.errorHandler != nil {
+				tn.conn.Publish(msg.Reply, tn.errorHandler(err))
 				return
 			}
 
-			nt.conn.Publish(msg.Reply, []byte(err.Error()))
+			tn.conn.Publish(msg.Reply, []byte(err.Error()))
 			return
 		}
 
-		nt.conn.Publish(msg.Reply, resp)
+		tn.conn.Publish(msg.Reply, resp)
 	}
 
 	var err error
@@ -135,9 +140,9 @@ func (nt *Nats) subscribe(subject string, a handler.ListenerAction) error {
 	}
 
 	if subscribeType == "queued" {
-		_, err = nt.conn.QueueSubscribe(subject, "job.workers", subscribeHandler)
+		_, err = tn.conn.QueueSubscribe(subject, "job.workers", subscribeHandler)
 	} else {
-		_, err = nt.conn.Subscribe(subject, subscribeHandler)
+		_, err = tn.conn.Subscribe(subject, subscribeHandler)
 	}
 
 	if err != nil {
@@ -145,43 +150,36 @@ func (nt *Nats) subscribe(subject string, a handler.ListenerAction) error {
 		return err
 	}
 
-	return nt.conn.Flush()
+	return tn.conn.Flush()
 }
 
 // Close the nats connection
-func (nt *Nats) Close() error {
-	if nt.conn != nil && nt.conn.Status() != nats.CONNECTED {
+func (tn *Transporter) Close() error {
+	if tn.conn != nil && tn.conn.Status() != nats.CONNECTED {
 		return errors.New("Can not close nats connection because the status is not connected")
 	}
 
-	nt.closeChan <- true
+	tn.closeChan <- true
 
-	nt.conn.Close()
+	tn.conn.Close()
 
 	// Reset close chan
-	nt.closeChan = make(chan bool)
+	tn.closeChan = make(chan bool)
 
-	nt.isClosed = true
+	tn.isClosed = true
 
 	return nil
 }
 
-// // New returns a new instance of nats transporter which will connects to the urls
-// // provided as parameter
-// func New(connUrls string, opts []nats.Option) Nats {
-// 	return Nats{
-// 		connUrls:  connUrls,
-// 		actions:   make(map[string]handler.ListenerAction),
-// 		opts:      opts,
-// 		closeChan: make(chan bool),
-// 	}
-// }
+/*----------------------------------------------------------------------------*\
+  Instantiation of tNats transporter
+\*----------------------------------------------------------------------------*/
 
 // New returns a new instance of nats transporter using an existing
 // nats connection.
-func New(conn *nats.Conn) Nats {
-	return Nats{
-		conn:      conn,
+func New(nc *nats.Conn) Transporter {
+	return Transporter{
+		conn:      nc,
 		actions:   make(map[string]handler.ListenerAction),
 		closeChan: make(chan bool),
 	}

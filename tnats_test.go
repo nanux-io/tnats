@@ -15,7 +15,7 @@ import (
 
 var _ = Describe("Nats transporter", func() {
 	var conn *nats.Conn
-	var nt Nats
+	var nt Transporter
 
 	res := []byte("action called")
 	sub := "testSub"
