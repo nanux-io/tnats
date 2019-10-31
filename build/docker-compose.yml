@@ -1,0 +1,18 @@
+version: '3.7'
+
+services:
+  go:
+    build: 
+      dockerfile: ./Dockerfile
+      context: .
+    command: bash
+    tty: true
+    volumes:
+      - ../:/home/go
+      - ./.go:/go
+      - ../../nanux/:/go/src/github.com/nanux-io/nanux
+
+  gnatsd:
+    image: nats:1.4.1
+    restart: on-failure:3
+    entrypoint: "/gnatsd -DV -m 8222"

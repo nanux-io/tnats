@@ -1,0 +1,43 @@
+#
+# Generic
+#
+
+# OS
+.DS_Store
+.DS_Store?
+*[Tt]humbs.db
+.Spotlight-V100
+.Trashes
+.Trash-1000/
+*.Trashes
+
+# packages
+bower_components/
+node_modules/
+vendor/
+*/build/*/.go
+
+#
+# Conventional
+#
+
+._*
+*.log
+.idea/
+.vscode/
+.tmp/
+
+# delve
+debug
+
+local/
+public/
+
+vc/
+coverage.out
+coverage.html
+# PhoneGap / Cordova
+#platforms
+#plugins
+#.bithoundrc
+
