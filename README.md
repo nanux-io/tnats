@@ -1,6 +1,6 @@
 # TNATS
 
-tnat is a nats transporter to be used with [nanux](https://github.com/nanux-io/nanux)
+tNats is a Nats transporter to be used with [nanux](https://github.com/nanux-io/nanux)
 
 ## Usage
 
@@ -8,7 +8,7 @@ tnat is a nats transporter to be used with [nanux](https://github.com/nanux-io/n
 
 To create a nats transporter there are 2 possibilities:
 
-* with an existing nats connection
+* with an existing Nats connection
 * letting tnats creating a nats connection
 
 #### With existing nats connection
@@ -16,11 +16,11 @@ To create a nats transporter there are 2 possibilities:
 ```go
 
 func creatingNatsTransporter() transporter.Listener {
-  var natsConn *nats.Conn
+  var nc *nats.Conn
 
   // TODO: create the nats conn by yourself
 
-  return tnast.New(natsConn)
+  return tnast.New(nc)
 }
 
 ```
@@ -31,14 +31,14 @@ func creatingNatsTransporter() transporter.Listener {
 
 func creatingNatsTransporter() transporter.Listener {
   var err error
-  var natsConn *nats.Conn
+  var nc *nats.Conn
   var natsOpts []nats.Option
 
   natsOpts = tnats.DefaultConnOptions()
 
-  natsConn, err = tnats.CreateConn(natsURLS, natsOpts)
+  nc, err = tnats.CreateConn(natsURLS, natsOpts)
 
-  return tnast.New(natsConn)
+  return tnast.New(nc)
 }
 
 ```
@@ -64,4 +64,4 @@ Command to execute test with check race condition: `go test -race -coverprofile=
 
 ## Contributor
 
-Thanks to [Nicolas Tall](https://github.com/nicolab) for the feedback.
+Thanks to [Nicolas Talle](https://github.com/nicolab) for the feedback.
