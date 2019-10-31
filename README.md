@@ -43,7 +43,7 @@ func creatingNatsTransporter() transporter.Listener {
 
 ```
 
-#### Actions
+### Actions
 
 With nats transporter there is the availability to use queue subscriptions by 
 setting it in the options of the Action (see following example)
