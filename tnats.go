@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/nanux-io/nanux/handler"
+	"github.com/nanux-io/nanux"
 
 	"github.com/nats-io/go-nats"
 
@@ -12,12 +12,12 @@ import (
 )
 
 /*----------------------------------------------------------------------------*\
-  Options for actions handled by nats
+  Options for handlers handled by nats
 \*----------------------------------------------------------------------------*/
 
-// NatsOptIsQueued is the name for the option telling to nat that the action must be queued.
+// NatsOptIsQueued is the name for the option telling to nat that the handler must be queued.
 // It means that only one subscriber will respond to the request
-const NatsOptIsQueued handler.OptName = "NATS_IS_QUEUED"
+const NatsOptIsQueued nanux.HandlerOptName = "NATS_IS_QUEUED"
 
 /*----------------------------------------------------------------------------*\
   tNats transporter
@@ -27,16 +27,15 @@ const NatsOptIsQueued handler.OptName = "NATS_IS_QUEUED"
 // interface from nanux transporter package
 type Transporter struct {
 	conn *nats.Conn
-	// The key corresponds to the subject associate to the action
-	actions      map[string]handler.ActionListener
-	errorHandler handler.ErrorHandler
+	// The key corresponds to the subject associate to the handler
+	tHandlers    map[string]nanux.THandler
+	errorHandler nanux.ErrorHandler
 	closeChan    chan bool
 	isClosed     bool
 }
 
-// Listen initialize the connection to nats server and subscribe to
-// the actions specified using Addhandler.
-func (tn *Transporter) Listen() error {
+// Run add subscriptions for all handlers added with `Handle`.
+func (tn *Transporter) Run() error {
 
 	if tn.isClosed {
 		errMsg := "The nats connection has been closed and can not be open again"
@@ -71,36 +70,31 @@ func (tn *Transporter) Listen() error {
 	return nil
 }
 
-// HandleAction add the action and associate it to the subject. This action will be
+// Handle add the handler and associate it to the subject. This handler will be
 // used when listen is called.
-func (tn *Transporter) HandleAction(subject string, action handler.ActionListener) error {
-	// Check if an action is already associated to the subject
-	if _, ok := tn.actions[subject]; ok == true {
-		return errors.New("There is already an action associated to the subject " + subject)
+func (tn *Transporter) Handle(subject string, tHandler nanux.THandler) error {
+	// Check if a handler is already associated to the subject
+	if _, ok := tn.tHandlers[subject]; ok == true {
+		return errors.New("There is already a handler associated to the subject " + subject)
 	}
 
-	tn.actions[subject] = action
+	tn.tHandlers[subject] = tHandler
 
-	if tn.conn != nil && tn.conn.Status() == nats.CONNECTED {
-		if err := tn.subscribe(subject, action); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
-// HandleError specify the function to use for handling error returns by action
-func (tn *Transporter) HandleError(errHandler handler.ErrorHandler) error {
+// HandleError specify the function to use for handling error returns by handler
+func (tn *Transporter) HandleError(errHandler nanux.ErrorHandler) error {
 	tn.errorHandler = errHandler
 	return nil
 }
 
-// subscribeAll in nats for each actions associate to it.
+// subscribeAll in nats for each handler associate to it.
 func (tn *Transporter) subscribeAll() error {
-	// For each action stored in the Nats instance, subscribe to it
+	// For each handler stored in the Nats instance, subscribe to it
 	// with the map key as subject.
-	for subject, action := range tn.actions {
-		if err := tn.subscribe(subject, action); err != nil {
+	for subject, tHandler := range tn.tHandlers {
+		if err := tn.subscribe(subject, tHandler); err != nil {
 			return err
 		}
 	}
@@ -108,16 +102,16 @@ func (tn *Transporter) subscribeAll() error {
 	return nil
 }
 
-func (tn *Transporter) subscribe(subject string, a handler.ActionListener) error {
+func (tn *Transporter) subscribe(subject string, tHandler nanux.THandler) error {
 	subscribeType := "normal"
 	subscribeHandler := func(msg *nats.Msg) {
-		req := handler.Request{Data: msg.Data}
-		resp, err := a.Fn(req)
+		req := nanux.Request{Data: msg.Data}
+		resp, err := tHandler.Fn(req)
 		if err != nil {
 			log.Error().Msgf("Handling subject %s - %s", subject, err)
 
 			if tn.errorHandler != nil {
-				tn.conn.Publish(msg.Reply, tn.errorHandler(err))
+				tn.conn.Publish(msg.Reply, tn.errorHandler(err, req))
 				return
 			}
 
@@ -130,7 +124,7 @@ func (tn *Transporter) subscribe(subject string, a handler.ActionListener) error
 
 	var err error
 
-	for _, opt := range a.Opts {
+	for _, opt := range tHandler.Opts {
 		switch opt.Name {
 		case NatsOptIsQueued:
 			if opt.Value == true {
@@ -180,7 +174,7 @@ func (tn *Transporter) Close() error {
 func New(nc *nats.Conn) Transporter {
 	return Transporter{
 		conn:      nc,
-		actions:   make(map[string]handler.ActionListener),
+		tHandlers: make(map[string]nanux.THandler),
 		closeChan: make(chan bool),
 	}
 }

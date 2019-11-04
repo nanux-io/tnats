@@ -8,8 +8,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/nanux-io/nanux/handler"
-	. "github.com/nanux-io/nanux/transporter"
+	"github.com/nanux-io/nanux"
 	. "github.com/nanux-io/tnats"
 )
 
@@ -29,59 +28,59 @@ var _ = Describe("Nats transporter", func() {
 		nt = New(conn)
 	})
 
-	It("should satisfy Listener interface", func() {
+	It("should satisfy Transporter interface", func() {
 		var i interface{} = &nt
-		_, ok := i.(Listener)
+		_, ok := i.(nanux.Transporter)
 		Expect(ok).To(Equal(true))
 	})
 
 	It("should allow to add actions before listening", func() {
-		fn1 := func(req handler.Request) ([]byte, error) {
+		fn1 := func(req nanux.Request) ([]byte, error) {
 			return res, nil
 		}
 
-		action := handler.ActionListener{Fn: fn1}
+		tHandler := nanux.THandler{Fn: fn1}
 
-		err := nt.HandleAction(sub, action)
+		err := nt.Handle(sub, tHandler)
 		Expect(err).ShouldNot(HaveOccurred())
 
 		// add subscription which will generate an error. It will be used in an other test.
-		fn2 := func(req handler.Request) ([]byte, error) {
+		fn2 := func(req nanux.Request) ([]byte, error) {
 			return nil, errors.New("Error in action")
 		}
 
-		err = nt.HandleAction(subErr, handler.ActionListener{Fn: fn2})
+		err = nt.Handle(subErr, nanux.THandler{Fn: fn2})
 		Expect(err).ShouldNot(HaveOccurred())
 
 	})
 
-	It("should allow action with queued option", func() {
-		fn := func(req handler.Request) ([]byte, error) {
+	It("should allow tHandler with queued option", func() {
+		fn := func(req nanux.Request) ([]byte, error) {
 			return res, nil
 		}
 
-		action := handler.ActionListener{
+		tHandler := nanux.THandler{
 			Fn:   fn,
-			Opts: []handler.Opt{{Name: NatsOptIsQueued, Value: true}},
+			Opts: []nanux.HandlerOpt{{Name: NatsOptIsQueued, Value: true}},
 		}
 
-		err := nt.HandleAction("queuedsub", action)
+		err := nt.Handle("queuedsub", tHandler)
 		Expect(err).ShouldNot(HaveOccurred())
 	})
 
-	It("should throw error if adding several actions for same subject", func() {
-		fn := func(req handler.Request) ([]byte, error) { return nil, nil }
+	It("should throw error if adding several handlers for same subject", func() {
+		fn := func(req nanux.Request) ([]byte, error) { return nil, nil }
 
-		action := handler.ActionListener{Fn: fn}
+		tHandle := nanux.THandler{Fn: fn}
 
-		nt.HandleAction("sameSub", action)
-		err := nt.HandleAction("sameSub", action)
+		nt.Handle("sameSub", tHandle)
+		err := nt.Handle("sameSub", tHandle)
 		Expect(err).To(BeAssignableToTypeOf(errors.New("")))
 	})
 
 	It("should start to listen", func() {
 		go func() {
-			err := nt.Listen()
+			err := nt.Run()
 			Expect(err).ShouldNot(HaveOccurred())
 		}()
 		time.Sleep(100 * time.Millisecond)
@@ -105,7 +104,7 @@ var _ = Describe("Nats transporter", func() {
 
 	It("should allow to add error handler", func() {
 		// add error manager
-		errorHandler := func(error) []byte { return []byte("Error managed") }
+		errorHandler := func(error, nanux.Request) []byte { return []byte("Error managed") }
 		err := nt.HandleError(errorHandler)
 		Expect(err).NotTo(HaveOccurred())
 	})
@@ -127,7 +126,7 @@ var _ = Describe("Nats transporter", func() {
 	})
 
 	It("should raise an error when try to listen an already close connection", func() {
-		err := nt.Listen()
+		err := nt.Run()
 
 		Expect(err).To(HaveOccurred())
 	})
@@ -147,7 +146,7 @@ var _ = Describe("Nats transporter", func() {
 		conn.Close()
 
 		nt := New(conn)
-		err = nt.Listen()
+		err = nt.Run()
 
 		Expect(err).To(HaveOccurred())
 
