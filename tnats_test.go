@@ -61,7 +61,7 @@ var _ = Describe("Nats transporter", func() {
 
 		tHandler := nanux.THandler{
 			Fn:   fn,
-			Opts: []nanux.HandlerOpt{{Name: NatsOptIsQueued, Value: true}},
+			Opts: map[nanux.HandlerOptName]interface{}{NatsOptIsQueued: true},
 		}
 
 		err := nt.Handle("queuedsub", tHandler)

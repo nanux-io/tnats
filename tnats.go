@@ -23,7 +23,7 @@ const NatsOptIsQueued nanux.HandlerOptName = "NATS_IS_QUEUED"
   tNats transporter
 \*----------------------------------------------------------------------------*/
 
-// Transporter define a tnats instance of transporter which resolve the `Listener`
+// Transporter define a tnats instance of transporter which resolve the `Transporter`
 // interface from nanux transporter package
 type Transporter struct {
 	conn *nats.Conn
@@ -124,10 +124,10 @@ func (tn *Transporter) subscribe(subject string, tHandler nanux.THandler) error 
 
 	var err error
 
-	for _, opt := range tHandler.Opts {
-		switch opt.Name {
+	for key, val := range tHandler.Opts {
+		switch key {
 		case NatsOptIsQueued:
-			if opt.Value == true {
+			if val == true {
 				subscribeType = "queued"
 			}
 		}
